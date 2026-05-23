@@ -1132,13 +1132,12 @@
     }
     function formatApiError(status, bodyText) {
       const parsed = parseApiErrorBody(bodyText);
-      if (parsed?.code === 'trial_expired') return safeSnippet(parsed.message);
+      if (parsed?.message) return safeSnippet(parsed.message);
       if (CONFIG.BYO_API_KEY === false && status === 503) return '服務暫時無法使用，請聯絡管理者';
       if (status === 401) return 'API Key 無效，請重新確認設定';
       if (status === 403) return 'API Key 權限不足或模型不可用';
       if (status === 429) return '請求太頻繁或額度已用盡，請稍後再試';
       if (status >= 500) return `OpenAI 服務暫時異常 (${status})`;
-      if (parsed?.message) return safeSnippet(parsed.message);
       return safeSnippet(bodyText) || `HTTP ${status || '未知'}`;
     }
     function shouldSendApiKey() {
