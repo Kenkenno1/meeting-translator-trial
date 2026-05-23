@@ -933,7 +933,7 @@
       <div class="display" id="displayJp">
         <div class="translated" id="translatedJp"></div>
         <div class="original" id="originalJp" style="display:none"></div>
-        <div class="placeholder" id="placeholderJp">等待 JP 發言…</div>
+        <div class="placeholder" id="placeholderJp">等待日文發言…</div>
         <button class="btn-play" id="btnPlayJp" style="display:none">🔊</button>
       </div>
       <div class="input-actions">
@@ -948,7 +948,7 @@
     <div class="zone" id="zoneTw">
       <span class="status-text" id="statusTw"></span>
       <div class="display" id="displayTw">
-        <div class="placeholder" id="placeholderTw">等待 TW 發言…</div>
+        <div class="placeholder" id="placeholderTw">等待中文發言…</div>
         <div class="original" id="originalTw" style="display:none"></div>
         <div class="translated" id="translatedTw"></div>
         <button class="btn-play" id="btnPlayTw" style="display:none">🔊</button>
@@ -1282,7 +1282,7 @@
         return await Promise.race([
           reader.read(),
           new Promise((_, rej) => {
-            timeoutId = setTimeout(() => rej(new Error('Stream timeout')), timeoutMs);
+            timeoutId = setTimeout(() => rej(new Error('翻譯串流逾時，請重試')), timeoutMs);
           }),
         ]);
       } finally {
@@ -2142,7 +2142,7 @@ Your task: revise a machine-translated draft to reach native-speaker quality.
         }
       }
       if (fallback !== undefined) return fallback;
-      throw new Error('No available model');
+      throw new Error('沒有可用的翻譯模型');
     }
 
     /*
@@ -2277,7 +2277,7 @@ Your task: revise a machine-translated draft to reach native-speaker quality.
           try { await reader.cancel(); } catch {}
           throw makeAbortError();
         }
-        if (e?.message === 'Stream timeout') {
+        if (e?.message === '翻譯串流逾時，請重試') {
           try { await reader.cancel(); } catch {}
         }
         throw e;
