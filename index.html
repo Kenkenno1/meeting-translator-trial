@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant" data-theme="dark">
+<html lang="zh-Hant" data-theme="dark" data-layout="side">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -170,7 +170,10 @@
        inside .display when content overflows. A JS-based scroll reversal or
        DOM restructuring would fix it, but needs real-device testing first. */
     .zone-jp{
-      transform:rotate(180deg);
+      transform:none;
+    }
+    .zone-peer{
+      transform:none;
     }
 
     .zone-label{
@@ -840,6 +843,84 @@
       pointer-events:none;
     }
 
+    
+    .layout-toggle{
+      display:inline-flex;
+      align-items:center;
+      gap:3px;
+      padding:3px;
+      border:1px solid var(--border);
+      border-radius:999px;
+      background:var(--panel);
+      flex-shrink:0;
+    }
+    .layout-toggle button{
+      border:0;
+      border-radius:999px;
+      background:transparent;
+      color:var(--muted);
+      padding:7px 10px;
+      min-height:34px;
+      font-size:12px;
+      font-weight:800;
+      line-height:1;
+      white-space:nowrap;
+      cursor:pointer;
+      transition:background 140ms ease, color 140ms ease, transform 90ms ease;
+    }
+    .layout-toggle button[aria-pressed="true"]{
+      background:var(--accentBg);
+      color:var(--accent);
+    }
+    .layout-toggle button:hover{
+      background:rgba(128,128,128,0.08);
+    }
+    .layout-toggle button:active{
+      transform:scale(0.98);
+    }
+    :root[data-layout="mirror"] .wrap{
+      max-width:min(620px, 100vw);
+      margin:0 auto;
+      display:flex;
+      flex-direction:column;
+    }
+    :root[data-layout="mirror"] .zone-peer{
+      transform:rotate(180deg);
+    }
+    @media (min-width: 900px){
+      :root[data-layout="side"] .wrap{
+        max-width:min(1280px, 100vw);
+        margin:0 auto;
+        display:grid;
+        grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr);
+        grid-template-rows:auto minmax(0, 1fr);
+        gap:8px;
+      }
+      :root[data-layout="side"] .toprow{
+        grid-column:1 / -1;
+      }
+      :root[data-layout="side"] #zoneTw{
+        grid-column:1;
+        grid-row:2;
+      }
+      :root[data-layout="side"] .divider{
+        grid-column:2;
+        grid-row:2;
+        width:1px;
+        height:100%;
+      }
+      :root[data-layout="side"] .zone-peer{
+        grid-column:3;
+        grid-row:2;
+      }
+    }
+    @media (max-width: 480px){
+      .app-title{display:none}
+      .toprow{flex-wrap:wrap}
+      .toprow > span[style]{display:none}
+      .layout-toggle{order:2;width:100%;justify-content:center}
+      .layout-toggle button{padding:7px 8px;font-size:11px}
+    }
     @media (prefers-reduced-motion: reduce){
       .btn-mic.recording,.btn-mic.mic-pending,.display.recording-active{animation:none}
       .display.loading .translated::before{animation:none;opacity:0.5}
@@ -918,6 +999,10 @@
     <!-- Top bar -->
     <div class="toprow">
       <span class="app-title">会議翻譯</span>
+      <div class="layout-toggle" aria-label="版面模式">
+        <button type="button" data-layout-mode="side" aria-pressed="true">↔ 同向</button>
+        <button type="button" data-layout-mode="mirror" aria-pressed="false">↻ 面對面</button>
+      </div>
       <button class="icon" id="btnTtsToggle" title="朗讀開關" aria-label="朗讀開關">🔊</button>
       <button class="icon" id="btnSummary" title="對話紀錄與摘要" aria-label="對話紀錄與摘要">📋</button>
       <button class="icon" id="btnClearAll" title="清除全部" aria-label="清除全部">🗑</button>
@@ -928,7 +1013,7 @@
 
     <!-- ===== JP Zone (rotated 180°) ===== -->
     <!-- HTML order is same as TW zone; rotate(180°) mirrors it for JP reader -->
-    <div class="zone zone-jp" id="zoneJp">
+    <div class="zone zone-jp zone-peer" id="zoneJp">
       <span class="status-text" id="statusJp"></span>
       <div class="display" id="displayJp">
         <div class="translated" id="translatedJp"></div>
@@ -1054,6 +1139,7 @@
       GLOSSARY: 'meeting_glossary',
       MEETING_CONTEXT: 'meeting_context',
       OFFLINE_QUEUE: 'meeting_offline_queue',
+      LAYOUT: 'meeting_interp_layout',
     };
 
     const TRANSLATE_MODEL = 'gpt-5.4-mini';
@@ -1408,6 +1494,7 @@
       apiKey: loadApiKey(),
       rememberApiKey: lsGet(STORAGE_KEYS.API_KEY_REMEMBER, '0') === '1',
       theme: lsGet(STORAGE_KEYS.THEME, 'dark'),
+      layoutMode: 'side',
       ttsOn: lsGet(STORAGE_KEYS.TTS_ON, '1') === '1',
       busy: false,
       controller: null,
@@ -1453,6 +1540,7 @@
       apiKeySection: $('apiKeySection'),
       advancedSettingsSection: $('advancedSettingsSection'),
       btnTheme: $('btnTheme'),
+      layoutButtons: document.querySelectorAll('[data-layout-mode]'),
       // Zones
       btnMicTw: $('btnMicTw'),
       btnMicJp: $('btnMicJp'),
@@ -1719,6 +1807,27 @@
     }
     el.btnTheme.addEventListener('click', () => applyTheme(state.theme === 'dark' ? 'light' : 'dark'));
     applyTheme(state.theme);
+
+    const VALID_LAYOUT_MODES = new Set(['side', 'mirror']);
+    function normalizeLayoutMode(value) {
+      return VALID_LAYOUT_MODES.has(value) ? value : 'side';
+    }
+    function applyLayoutMode(mode, persist = false) {
+      const next = normalizeLayoutMode(mode);
+      state.layoutMode = next;
+      document.documentElement.dataset.layout = next;
+      el.layoutButtons.forEach(button => {
+        button.setAttribute('aria-pressed', button.dataset.layoutMode === next ? 'true' : 'false');
+      });
+      if (persist) lsSet(STORAGE_KEYS.LAYOUT, next);
+    }
+    function initLayoutMode() {
+      applyLayoutMode(lsGet(STORAGE_KEYS.LAYOUT, 'side'), false);
+      el.layoutButtons.forEach(button => {
+        button.addEventListener('click', () => applyLayoutMode(button.dataset.layoutMode, true));
+      });
+    }
+    initLayoutMode();
 
     // ========== TTS Toggle ==========
     function updateTtsBtn() {
